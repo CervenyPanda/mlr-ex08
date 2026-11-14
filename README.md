@@ -12,3 +12,4 @@ ONNX Runtime Web; no image leaves the phone.
 | `leaf_model.onnx` | the model exported from the notebook (Task 2e) |
 | `model_info.json` | classes, input size, mean and std of the preprocessing |
 | `check_image.jpg`, `check_expected.json` | one validation image and the notebook's probabilities for it |
+| `check_image.png` | the same image as the notebook decoded it (lossless), so the check does not depend on the browser's JPEG decoder |

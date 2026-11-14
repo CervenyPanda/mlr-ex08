@@ -94,7 +94,7 @@
 
   <section class="panel">
     <h2>Check against the notebook</h2>
-    <p class="muted">Runs <code>check_image.jpg</code> through this page and compares the result with <code>check_expected.json</code>.</p>
+    <p class="muted">Runs the check image through this page and compares the result with <code>check_expected.json</code>: once from <code>check_image.png</code> (exactly the notebook's pixels) and once from <code>check_image.jpg</code> as this browser decodes it.</p>
     <button id="checkButton" disabled>Run the check</button>
     <div id="checkResult"></div>
   </section>
@@ -311,24 +311,35 @@ checkButton.addEventListener("click", async () => {
   await waitUntilFree();
   try {
     const expected = await (await fetch("check_expected.json")).json();
-    const image = await loadImage("check_image.jpg");
     busy = true;
-    const probabilities = await classify(image, image.naturalWidth, image.naturalHeight);
+    // check_image.png holds exactly the pixels the notebook got from check_image.jpg (decoded with PIL
+    // and saved losslessly), so this column tests the preprocessing and the model of this page.
+    const png = await loadImage("check_image.png");
+    const exact = await classify(png, png.naturalWidth, png.naturalHeight);
+    // check_image.jpg is decoded by this browser; browsers may decode a JPEG slightly differently.
+    const jpg = await loadImage("check_image.jpg");
+    const decoded = await classify(jpg, jpg.naturalWidth, jpg.naturalHeight);
     busy = false;
 
-    let largest = 0;
-    let html = "<table><tr><th>class</th><th>notebook</th><th>this page</th><th>difference</th></tr>";
+    let largestExact = 0;
+    let largestJpeg = 0;
+    let html = "<table><tr><th>class</th><th>notebook</th><th>same pixels (PNG)</th><th>browser's JPEG</th></tr>";
     info.classes.forEach((name, i) => {
-      const difference = Math.abs(probabilities[i] - expected[name]);
-      largest = Math.max(largest, difference);
+      largestExact = Math.max(largestExact, Math.abs(exact[i] - expected[name]));
+      largestJpeg = Math.max(largestJpeg, Math.abs(decoded[i] - expected[name]));
       html += "<tr><td>" + name + "</td><td>" + expected[name].toFixed(6) + "</td><td>" +
-              probabilities[i].toFixed(6) + "</td><td>" + difference.toExponential(1) + "</td></tr>";
+              exact[i].toFixed(6) + "</td><td>" + decoded[i].toFixed(6) + "</td></tr>";
     });
     html += "</table>";
-    const ok = largest < 0.0005;              // the same to three decimals
+    const ok = largestExact < 0.0005;         // the same to three decimals
     html += '<p id="checkVerdict" class="' + (ok ? "ok" : "bad") + '">' +
-            (ok ? "Agrees to three decimals" : "Does NOT agree to three decimals") +
-            " (largest difference " + largest.toExponential(1) + ").</p>";
+            (ok ? "Same pixels: agrees to three decimals" : "Same pixels: does NOT agree to three decimals") +
+            " (largest difference " + largestExact.toExponential(1) + ").</p>";
+    html += '<p class="muted" id="jpegNote">' +
+            (largestJpeg < 0.0005
+              ? "The JPEG decoded by this browser agrees too (largest difference " + largestJpeg.toExponential(1) + ")."
+              : "The JPEG decoded by this browser differs (largest difference " + largestJpeg.toExponential(1) +
+                "): this browser decodes check_image.jpg into slightly different pixels than the notebook.") + "</p>";
     result.innerHTML = html;
   } catch (error) {
     busy = false;
